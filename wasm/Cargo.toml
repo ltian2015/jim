@@ -1,0 +1,18 @@
+[package]
+name = "jim"
+version = "0.0.0"
+authors = ["Nathaniel Cook <nvcook42@gmail.com>"]
+license = "MIT"
+repository = "https://github.com/nathanielc/jim"
+description = "Language for simple Home Automation"
+
+[[bin]]
+name = "jim"
+path = "src/jim.rs"
+
+[dependencies]
+cranelift = "0.33.0"
+cranelift-module = "0.33.0"
+cranelift-simplejit = "0.33.0"
+peg = "0.6"
+
