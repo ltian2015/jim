@@ -6,9 +6,15 @@
         local.get $n
         i32.add)
   ;; This function performs ASCII lower casing of values in the range A-Z
-  (func (export "to_lower") (param $p i32) (param $n i32)
+  (func (export "to_lower") (param $str i64)
+    (local $p i32)
+    (local $n i32)
     (local $c i32)
     (local $l i32)
+    ;; Convert i64 to offset/length
+    (set_local $p (i32.wrap/i64 (get_local $str)))
+    (set_local $n (i32.wrap/i64 (i64.shr_u (get_local $str) (i64.const 32))))
+
     (set_local $l (call $add (get_local $n) (get_local $p)))
     (block
       (loop

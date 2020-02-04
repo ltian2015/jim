@@ -58,8 +58,12 @@ fn main() -> error::Result<()> {
     }
 
     // Let's call the exported function that concatenates a phrase to our string.
-    let to_lower: Func<(u32,u32)> = instance.func("to_lower").expect("to_lower export");
-    to_lower.call(wasm_buffer_pointer.offset(), original_string.len() as u32).unwrap();
+    let to_lower: Func<(u64)> = instance.func("to_lower").expect("to_lower export");
+
+    let o : u64 = wasm_buffer_pointer.offset() as u64;
+    let l : u64 = original_string.len() as u64;
+    let strp :u64 = o | (l<< 32);
+    to_lower.call(strp).unwrap();
 
     // Read the string from that new pointer.
     let new_string = wasm_buffer_pointer
