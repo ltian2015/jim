@@ -82,6 +82,24 @@ fn main() -> error::Result<()> {
     // Asserting that the returned value from the function is our expected value.
     assert_eq!(answer, 47);
 
+    let alloc : Func<(),u32> = instance.func("alloc").expect("alloc export");
+    let get_allocated : Func<(),u64> = instance.func("get_allocated").expect("get_allocated export");
+    let free : Func<u64> = instance.func("free").expect("free export");
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+    println!("Alloc 0: {}", alloc.call().unwrap());
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+    println!("Alloc 1: {}", alloc.call().unwrap());
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+    println!("Alloc 2: {}", alloc.call().unwrap());
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+
+    free.call(1024).unwrap();
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+    free.call(0).unwrap();
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+    free.call(2048).unwrap();
+    println!("allocated: {:b}", get_allocated.call().unwrap());
+
     // Log a success message.
     println!("Success!");
 

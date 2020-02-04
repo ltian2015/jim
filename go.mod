@@ -13,3 +13,5 @@ require (
 	github.com/pkg/errors v0.8.0
 	golang.org/x/sys v0.0.0-20181211161752-7da8ea5c8182 // indirect
 )
+
+go 1.13
