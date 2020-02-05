@@ -44,7 +44,11 @@ fn main() -> error::Result<()> {
     let wasm_instance_context = instance.context();
     let wasm_instance_memory = wasm_instance_context.memory(0);
 
-    let wasm_buffer_pointer: WasmPtr<u8, Array> = WasmPtr::new(0);
+    let alloc : Func<(),u32> = instance.func("alloc").expect("alloc export");
+    let get_allocated : Func<(),u64> = instance.func("get_allocated").expect("get_allocated export");
+    let free : Func<u64> = instance.func("free").expect("free export");
+
+    let wasm_buffer_pointer: WasmPtr<u8, Array> = WasmPtr::new(alloc.call().unwrap());
 
     // Let's write a string to the wasm memory
     let original_string = "WASM is COOL";
@@ -62,7 +66,7 @@ fn main() -> error::Result<()> {
 
     let o : u64 = wasm_buffer_pointer.offset() as u64;
     let l : u64 = original_string.len() as u64;
-    let strp :u64 = o | (l<< 32);
+    let strp :u64 = o | (l << 32);
     to_lower.call(strp).unwrap();
 
     // Read the string from that new pointer.
@@ -86,9 +90,6 @@ fn main() -> error::Result<()> {
     // Asserting that the returned value from the function is our expected value.
     assert_eq!(answer, 47);
 
-    let alloc : Func<(),u32> = instance.func("alloc").expect("alloc export");
-    let get_allocated : Func<(),u64> = instance.func("get_allocated").expect("get_allocated export");
-    let free : Func<u64> = instance.func("free").expect("free export");
     println!("allocated: {:b}", get_allocated.call().unwrap());
     println!("Alloc 0: {}", alloc.call().unwrap());
     println!("allocated: {:b}", get_allocated.call().unwrap());

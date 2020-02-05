@@ -22,7 +22,9 @@ The runtime must provide the following functions to the compiled WASM modules:
 
 * get : (path: i64, ) -> i64 - Get returns the string value of the given key. See note about how strings are handled.
 * set : (path: i64, value: i64) -> () - Set stores the value at the provided path.
-* sched : (at: i32, func: i32) -> i32 : Sched schedules the function to run at the specified time as a unix epoch in seconds.
+* now : () -> i64 : Now reports the current time as nanoseconds since the epoch.
+* at : (at: i64, func: i32) -> () : At schedules the function to run at the specified time as a unix epoch in nanoseconds.
+* watch : (path: i64, value: i64, func: i32) : Watch registers a watcher for when the given path is equal to a value the function will trigger.
 * wait : () -> i32 - Wait blocks until an event has occurred on the bus. The return value is the table index of the next function to call.
 * exec : (func: i32) -> () - Exec calls the function (as a table index) and returns.
 * loop: () -> () - Loop calls wait and exec in a loop until the exit signal is recieved
@@ -47,9 +49,10 @@ Maybe this loop can be compiled into the modules?
 
 A precompiled runtime written using a pure WASM implementation is provied for the following functions:
 
+* exec
+* loop
 * alloc
 * free
-* loop
 
 
 

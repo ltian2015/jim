@@ -1,46 +1,24 @@
 (module
-  (import "runtime" "wait" (func $wait (result i64)))
-  (import "env" "forty_two" (func $forty_two (result i32)))
+  (import "env" "get" (func $get (param i64) (result i64)))
+  (import "env" "set" (func $set (param i64) (param i64)))
+  (import "env" "now" (func $now (result i64)))
+  (import "env" "at" (func $at (param i64) (param i32)))
+  (import "env" "watch" (func $watch (param i64) (param i64) (param i32)))
+  (import "env" "wait" (func $wait (result i32)))
+  (import "env" "wait" (func $wait (result i32)))
+  (import "env" "table" (table 0 funcref))
   (memory 1)
-  (func (export "add_forty_two") (param $n i32) (result i32)
-        call $forty_two
-        local.get $n
-        i32.add)
-  ;; This function performs ASCII lower casing of values in the range A-Z
-  (func (export "to_lower") (param $str i64)
-    (local $p i32)
-    (local $n i32)
-    (local $c i32)
-    (local $l i32)
-    ;; Convert i64 to offset/length
-    (set_local $p (i32.wrap/i64 (get_local $str)))
-    (set_local $n (i32.wrap/i64 (i64.shr_u (get_local $str) (i64.const 32))))
-
-    (set_local $l (call $add (get_local $n) (get_local $p)))
-    (block
-      (loop
-        (set_local $c (i32.load8_u (get_local $p)))
-        (if (i32.le_u (get_local $c) (i32.const 90))
-            (if (i32.ge_u (get_local $c) (i32.const 65))
-                (set_local $c (call $lower (get_local $c)))))
-        (i32.store8 (get_local $p) (get_local $c))
-        (set_local $p (call $increment (get_local $p)))
-        (br_if 1 (i32.eq (get_local $p) (get_local $l)))
-        (br 0)
-      )
-    ))
-  (func $lower (param $a i32) (result i32)
-        local.get $a
-        i32.const 32
-        i32.add)
-  (func $add (param $a i32) (param $b i32) (result i32)
-        local.get $a
-        local.get $b
-        i32.add)
-  (func $increment (param $n i32) (result i32)
-        local.get $n
-        i32.const 1
-        i32.add)
+  (func $exec (export "exec") (param $fn i32)
+        (call_indirect (get_local $fn)))
+  (func $loop (export "loop") 
+        (local $fn i32)
+        (block
+          (loop
+            (set_local $fn (call $wait))
+            (br_if 1 (i32.lt_s (get_local $fn) (i32.const 0)))
+            (call $exec (get_local $fn))
+            (br 0)
+          )))
   ;; The following implements the most trivial of allocators.
   ;; Memory is allocated in 1024 byte chunks.
   ;; A single 64-bit value ($allocated) is used as a bit mask where a set bit indicates the memory is used.
@@ -77,6 +55,4 @@
         ;; bit clear the addr count on the global allocated var
         (global.set $allocated (i64.and (global.get $allocated) (i64.xor (i64.const -1) (i64.shl (i64.const 1) (get_local $cnt)))))
         )
-  (func $get_allocated (export "get_allocated") (result i64)
-        global.get $allocated)
 )
