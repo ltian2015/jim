@@ -5,20 +5,7 @@
   (import "env" "at" (func $at (param i64) (param i32)))
   (import "env" "watch" (func $watch (param i64) (param i64) (param i32)))
   (import "env" "wait" (func $wait (result i32)))
-  (import "env" "wait" (func $wait (result i32)))
-  (import "env" "table" (table 0 funcref))
   (memory 1)
-  (func $exec (export "exec") (param $fn i32)
-        (call_indirect (get_local $fn)))
-  (func $loop (export "loop") 
-        (local $fn i32)
-        (block
-          (loop
-            (set_local $fn (call $wait))
-            (br_if 1 (i32.lt_s (get_local $fn) (i32.const 0)))
-            (call $exec (get_local $fn))
-            (br 0)
-          )))
   ;; The following implements the most trivial of allocators.
   ;; Memory is allocated in 1024 byte chunks.
   ;; A single 64-bit value ($allocated) is used as a bit mask where a set bit indicates the memory is used.
@@ -49,9 +36,9 @@
         )
         (get_local $addr)
         )
-  (func $free (export "free") (param $addr i64)
+  (func $free (export "free") (param $addr i32)
         (local $cnt i64)
-        (set_local $cnt (i64.div_s (get_local $addr) (i64.const 1024)))
+        (set_local $cnt (i64.div_s (i64.extend_u/i32 (get_local $addr)) (i64.const 1024)))
         ;; bit clear the addr count on the global allocated var
         (global.set $allocated (i64.and (global.get $allocated) (i64.xor (i64.const -1) (i64.shl (i64.const 1) (get_local $cnt)))))
         )

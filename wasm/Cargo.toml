@@ -14,4 +14,4 @@ path = "src/jim.rs"
 [dependencies]
 lexpr = "0.2.4"
 peg = "0.6"
-wasmer-runtime = "0.13.1"
+wasmtime = "0.9.0"

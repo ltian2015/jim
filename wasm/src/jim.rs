@@ -1,113 +1,135 @@
-// Import the Filesystem so we can read our .wasm file
-use std::fs::File;
-use std::io::prelude::*;
 extern crate peg;
+
+// Import the Filesystem so we can read our .wasm files
+use std::fs::read;
 
 //mod codegen;
 //mod frontend;
 
-// Import the wasmer runtime so we can use it
-use wasmer_runtime::{error, func, imports, instantiate, Array, Func, WasmPtr};
+use wasmtime::*;
 
 // Get the path of compiled webassembly
-const WASM_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/jim.wasm");
+const RUNTIME_WASM_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/runtime.wasm");
+const JIM_WASM_FILE_PATH: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/jim.wasm");
 
 // Our entry point to our application
-fn main() -> error::Result<()> {
-    // Let's read in our .wasm file as bytes
+fn main() {
+        let store = Store::default();
 
-    // Let's open the file.
-    let mut file = File::open(WASM_FILE_PATH).expect(&format!("wasm file at {}", WASM_FILE_PATH));
+        let runtime_wasm = read(RUNTIME_WASM_FILE_PATH).expect("reading runtime wasm");
 
-    // Let's read the file into a Vec
-    let mut wasm_vec = Vec::new();
-    file.read_to_end(&mut wasm_vec)
-        .expect("Error reading the wasm file");
+        let runtime_module = Module::new(&store, &runtime_wasm).expect("wasm runtime module");
 
+        let jim_wasm = read(JIM_WASM_FILE_PATH).expect("reading jim wasm");
 
-    // Prepare imports
-    let forty_two = move || -> i32 {42};
+        let jim_module = Module::new(&store, &jim_wasm).expect("wasm jim module");
 
+        // Create env for runtime
+        // The order here must match the import order in the WASM module.
+        let env: &[Extern] = &[
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(Box::new([ValType::I64]), Box::new([ValType::I64])),
+                        std::rc::Rc::new(Get),
+                ))),
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(Box::new([ValType::I64, ValType::I64]), Box::new([])),
+                        std::rc::Rc::new(Set),
+                ))),
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(Box::new([]), Box::new([ValType::I64])),
+                        std::rc::Rc::new(Now),
+                ))),
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(Box::new([ValType::I64, ValType::I32]), Box::new([])),
+                        std::rc::Rc::new(At),
+                ))),
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(
+                                Box::new([ValType::I64, ValType::I64, ValType::I32]),
+                                Box::new([]),
+                        ),
+                        std::rc::Rc::new(Watch),
+                ))),
+                Extern::Func(HostRef::new(Func::new(
+                        &store,
+                        FuncType::new(Box::new([]), Box::new([ValType::I32])),
+                        std::rc::Rc::new(Wait),
+                ))),
+        ];
 
-    // Our import object, that allows exposing functions to our wasm module.
-    // We're not importing anything, so make an empty import object.
-    let import_object = imports! {
-        "env"=> {
-            "forty_two" => func!(forty_two),
-        },
-    };
+        let runtime = Instance::new(&store, &runtime_module, env).expect("wasm runtime instance");
+        let externs = [env, runtime.exports()].concat();
+        let jim = Instance::new(&store, &jim_module, &externs).expect("wasm jim instance");
+        let entry = jim
+                .find_export_by_name("main")
+                .expect("find main")
+                .func()
+                .expect("function");
+        println!(
+                "Main exit code {}",
+                entry.borrow().call(&[]).expect("call main")[0].unwrap_i32()
+        );
+}
 
-    // Let's create an instance of wasm module running in the wasmer-runtime
-    let instance = instantiate(&wasm_vec, &import_object)?;
+struct Get;
 
-    // Lets get the context and memory of our Wasm Instance
-    let wasm_instance_context = instance.context();
-    let wasm_instance_memory = wasm_instance_context.memory(0);
+impl wasmtime::Callable for Get {
+        fn call(&self, params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                let mut value = params[0].unwrap_i64();
+                value *= 2;
+                results[0] = value.into();
 
-    let alloc : Func<(),u32> = instance.func("alloc").expect("alloc export");
-    let get_allocated : Func<(),u64> = instance.func("get_allocated").expect("get_allocated export");
-    let free : Func<u64> = instance.func("free").expect("free export");
+                Ok(())
+        }
+}
 
-    let wasm_buffer_pointer: WasmPtr<u8, Array> = WasmPtr::new(alloc.call().unwrap());
+struct Set;
 
-    // Let's write a string to the wasm memory
-    let original_string = "WASM is COOL";
-    println!("The original string is: {}", original_string);
-    // We deref our WasmPtr to get a &[Cell<u8>]
-    let memory_writer = wasm_buffer_pointer
-        .deref(wasm_instance_memory, 0, original_string.len() as u32)
-        .unwrap();
-    for (i, b) in original_string.bytes().enumerate() {
-        memory_writer[i].set(b);
-    }
+impl wasmtime::Callable for Set {
+        fn call(&self, params: &[Val], _results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                let mut _path = params[0].unwrap_i64();
+                let mut _value = params[1].unwrap_i64();
+                Ok(())
+        }
+}
 
-    // Let's call the exported function that concatenates a phrase to our string.
-    let to_lower: Func<(u64)> = instance.func("to_lower").expect("to_lower export");
+struct Now;
 
-    let o : u64 = wasm_buffer_pointer.offset() as u64;
-    let l : u64 = original_string.len() as u64;
-    let strp :u64 = o | (l << 32);
-    to_lower.call(strp).unwrap();
+impl wasmtime::Callable for Now {
+        fn call(&self, _params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                results[0] = (1i64).into();
+                Ok(())
+        }
+}
+struct At;
 
-    // Read the string from that new pointer.
-    let new_string = wasm_buffer_pointer
-        .get_utf8_string(wasm_instance_memory, original_string.len() as u32)
-        .unwrap();
-    println!("The new string is: {}", new_string);
+impl wasmtime::Callable for At {
+        fn call(&self, params: &[Val], _results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                let mut _time = params[0].unwrap_i64();
+                let mut _fn = params[1].unwrap_i32();
+                Ok(())
+        }
+}
+struct Watch;
 
-    // Asserting that the returned value from the function is our expected value.
-    assert_eq!(new_string, "wasm is cool");
+impl wasmtime::Callable for Watch {
+        fn call(&self, params: &[Val], _results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                let mut _path = params[0].unwrap_i64();
+                let mut _value = params[1].unwrap_i64();
+                let mut _fn = params[2].unwrap_i32();
+                Ok(())
+        }
+}
+struct Wait;
 
-    // Log a success message.
-    println!("Success!");
-
-    println!("Using imported functions!");
-
-    let add_forty_two: Func<u32,u32> = instance.func("add_forty_two").expect("add_forty_two export");
-    let answer = add_forty_two.call(5).unwrap();
-    println!("The answer is: {}", answer);
-
-    // Asserting that the returned value from the function is our expected value.
-    assert_eq!(answer, 47);
-
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-    println!("Alloc 0: {}", alloc.call().unwrap());
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-    println!("Alloc 1: {}", alloc.call().unwrap());
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-    println!("Alloc 2: {}", alloc.call().unwrap());
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-
-    free.call(1024).unwrap();
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-    free.call(0).unwrap();
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-    free.call(2048).unwrap();
-    println!("allocated: {:b}", get_allocated.call().unwrap());
-
-    // Log a success message.
-    println!("Success!");
-
-    // Return OK since everything executed successfully!
-    Ok(())
+impl wasmtime::Callable for Wait {
+        fn call(&self, _params: &[Val], results: &mut [Val]) -> Result<(), wasmtime::Trap> {
+                results[0] = (-1i32).into();
+                Ok(())
+        }
 }
